@@ -1,9 +1,14 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Configuration struct {
@@ -15,22 +20,55 @@ type Configuration struct {
 var config *Configuration
 
 func Config() *Configuration {
+	var encoder *json.Encoder
+	var configFile = viper.GetString("CONFIG_FILE")
+
 	if config == nil {
 		config = &Configuration{}
 
-		viper.SetConfigName("config")
+		viper.SetConfigName(strings.TrimSuffix(configFile, filepath.Ext(configFile)))
 		viper.AddConfigPath(fmt.Sprintf("$%s/", viper.Get("CONFIG")))
 		viper.AddConfigPath(".")
 
 		err := viper.ReadInConfig()
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// request the API for a new id
 			glog.Info("no config found, registring the node")
+			anthive := viper.GetString("Anthive")
+			resp, err := Client.Post(anthive+"/antlings", "application/json", bytes.NewReader(nil))
+			if err != nil {
+				glog.Fatalf("%s", err)
+			}
+			decoder := json.NewDecoder(resp.Body)
+			err = decoder.Decode(config)
+			// prepare the file for encoding our config
+			if err != nil {
+				glog.Fatalf("%s", err)
+			}
+			config.Anthive = anthive
+			out, err := os.Create(configFile)
+			if err != nil {
+				glog.Fatalf("%s", err)
+			}
+			defer out.Close()
+			encoder = json.NewEncoder(out)
 		} else if err != nil {
 			glog.Fatalf("when reading config file: %s", err)
 		}
+
+		// load the config into our struct
 		err = viper.Unmarshal(config)
 		if err != nil {
 			glog.Fatalf("when unmarshalling the json: %s", err)
+		}
+
+		// if an id has been requested the encoder is set up
+		if encoder != nil {
+			glog.Infof("writing config to a file %s", configFile)
+			err = encoder.Encode(config)
+			if err != nil {
+				glog.Fatalf("%s", err)
+			}
 		}
 	}
 	return config
@@ -39,4 +77,6 @@ func Config() *Configuration {
 func init() {
 	viper.Set("PROJECT", "github.com/alienantfarm/antling")
 	viper.Set("CONFIG", "ANTLING_CONFIG")
+	viper.Set("CONFIG_FILE", "config.json")
+	viper.BindEnv("Anthive", "ANTHIVE_URL")
 }
