@@ -1,10 +1,21 @@
 package utils
 
 import (
-	"net/http"
-	"time"
+	"fmt"
+	"strings"
 )
 
-var Client = &http.Client{
-	Timeout: time.Second * 10,
+func Urlize(fragments ...string) string {
+	return strings.Join(fragments, "/")
+}
+
+type UnexpectedStatusCode struct {
+	Expected int
+	Received int
+}
+
+func (usc *UnexpectedStatusCode) Error() string {
+	return fmt.Sprintf(
+		"unexpected status code, want: %d, got: %d", usc.Expected, usc.Received,
+	)
 }

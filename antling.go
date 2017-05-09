@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/alienantfarm/antling/utils"
+	"github.com/alienantfarm/antling/utils/config"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"os"
@@ -18,8 +18,7 @@ var rootCmd = &cobra.Command{
 		flag.Parse()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		conf := utils.Config()
-		if conf.Debug {
+		if config.Get().Debug {
 			flag.Set("v", "10") // totally arbitrary but who cares!
 			flag.Parse()
 		}

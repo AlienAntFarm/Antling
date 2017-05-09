@@ -1,9 +1,9 @@
-package utils
+package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/alienantfarm/antling/client"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 	"os"
@@ -19,7 +19,7 @@ type Configuration struct {
 
 var config *Configuration
 
-func Config() *Configuration {
+func Get() *Configuration {
 	var encoder *json.Encoder
 	var configFile = viper.GetString("CONFIG_FILE")
 
@@ -34,18 +34,13 @@ func Config() *Configuration {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// request the API for a new id
 			glog.Info("no config found, registring the node")
-			anthive := viper.GetString("Anthive")
-			resp, err := Client.Post(anthive+"/antlings", "application/json", bytes.NewReader(nil))
+			antling, err := client.NewClient().Antling.Create()
 			if err != nil {
 				glog.Fatalf("%s", err)
 			}
-			decoder := json.NewDecoder(resp.Body)
-			err = decoder.Decode(config)
+			config.Id = antling.Id
+
 			// prepare the file for encoding our config
-			if err != nil {
-				glog.Fatalf("%s", err)
-			}
-			config.Anthive = anthive
 			out, err := os.Create(configFile)
 			if err != nil {
 				glog.Fatalf("%s", err)
@@ -71,6 +66,7 @@ func Config() *Configuration {
 			}
 		}
 	}
+	glog.Infof("config loaded")
 	return config
 }
 
