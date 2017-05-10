@@ -5,17 +5,31 @@ import (
 	"github.com/golang/glog"
 )
 
-type scheduler struct{}
+type scheduler struct {
+	jobs    []*client.Job
+	channel chan *client.Job
+}
 
-var s *scheduler
+var Scheduler *scheduler
 
-func Get() *scheduler {
-	if s == nil {
-		s = &scheduler{}
+func InitScheduler() *scheduler {
+	if Scheduler != nil {
+		glog.Fatalf("scheduler already inited, something bad is happening")
+	} else {
+		Scheduler = &scheduler{[]*client.Job{}, make(chan *client.Job, 1)}
+		go Scheduler.start()
 	}
-	return s
+	return Scheduler
+}
+
+func (s *scheduler) start() {
+	for job := range s.channel {
+		glog.Infof("processing job %d, with status %s", job.Id, client.JOB_STATES[job.State])
+	}
 }
 
 func (s *scheduler) ProcessJobs(jobs []*client.Job) {
-	glog.Infof("processing jobs %q", jobs)
+	for _, job := range jobs {
+		s.channel <- job
+	}
 }

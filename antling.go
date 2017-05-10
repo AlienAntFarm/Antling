@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		c := config.Get()
-		s := scheduler.Get()
+		s := scheduler.InitScheduler()
 		if c.Debug {
 			flag.Set("v", "10") // totally arbitrary but who cares!
 			flag.Parse()
