@@ -2,8 +2,10 @@ package client
 
 import (
 	"github.com/alienantfarm/antling/utils"
+	"github.com/spf13/viper"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -13,8 +15,14 @@ type endpoint struct {
 	Parent *endpoint
 }
 
+var client *Client
+
 func (e *endpoint) Post(body io.Reader) (*http.Response, error) {
 	return e.Client.Post(e.Url, "application/json", body)
+}
+
+func (e *endpoint) Get(id int) (*http.Response, error) {
+	return e.Client.Get(utils.Urlize(e.Url, strconv.Itoa(id)))
 }
 
 func newEndpoint(fragment string, parent *endpoint) *endpoint {
@@ -29,4 +37,16 @@ func newEndpoint(fragment string, parent *endpoint) *endpoint {
 	return &endpoint{client, fragment, parent}
 }
 
-var NewClient = newAnthive
+type Client struct {
+	*endpoint
+	Antling *antling
+}
+
+func Get() *Client {
+	if client == nil {
+		client = &Client{newEndpoint(viper.GetString("Anthive"), nil), nil}
+		client.Antling = &antling{newEndpoint("antlings", client.endpoint)}
+	}
+
+	return client
+}

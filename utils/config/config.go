@@ -12,9 +12,10 @@ import (
 )
 
 type Configuration struct {
-	Id      int    `json:"id"`
-	Debug   bool   `json:"debug"`
-	Anthive string `json:"anthive"`
+	Id      int            `json:"id"`
+	Debug   bool           `json:"debug"`
+	Anthive string         `json:"anthive"`
+	Client  *client.Client `json:"-"`
 }
 
 var config *Configuration
@@ -24,7 +25,7 @@ func Get() *Configuration {
 	var configFile = viper.GetString("CONFIG_FILE")
 
 	if config == nil {
-		config = &Configuration{}
+		config = &Configuration{Client: client.Get()}
 
 		viper.SetConfigName(strings.TrimSuffix(configFile, filepath.Ext(configFile)))
 		viper.AddConfigPath(fmt.Sprintf("$%s/", viper.Get("CONFIG")))
@@ -34,7 +35,7 @@ func Get() *Configuration {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// request the API for a new id
 			glog.Info("no config found, registring the node")
-			antling, err := client.NewClient().Antling.Create()
+			antling, err := config.Client.Antling.Create()
 			if err != nil {
 				glog.Fatalf("%s", err)
 			}

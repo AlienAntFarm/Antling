@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"github.com/alienantfarm/antling/client"
 	"github.com/alienantfarm/antling/utils/config"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"os"
+	"time"
 )
 
 var rootCmd = &cobra.Command{
@@ -18,11 +20,25 @@ var rootCmd = &cobra.Command{
 		flag.Parse()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if config.Get().Debug {
+		c := config.Get()
+		if c.Debug {
 			flag.Set("v", "10") // totally arbitrary but who cares!
 			flag.Parse()
 		}
 		glog.V(1).Infoln("debug mode enabled")
+
+		// setup self
+		self := client.NewAntling(c.Id, c.Client)
+
+		// start main loop
+		for {
+			jobs, err := self.GetJobs()
+			if err != nil {
+				glog.Fatalf("%s", err)
+			}
+			glog.Infof("%q", jobs)
+			time.Sleep(10 * time.Second)
+		}
 	},
 }
 
