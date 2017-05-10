@@ -1,13 +1,13 @@
 package scheduler
 
 import (
-	"github.com/alienantfarm/antling/client"
+	"github.com/alienantfarm/anthive/utils/structs"
 	"github.com/golang/glog"
 )
 
 type scheduler struct {
-	jobs    []*client.Job
-	channel chan *client.Job
+	jobs    []*structs.Job
+	channel chan *structs.Job
 }
 
 var Scheduler *scheduler
@@ -16,7 +16,7 @@ func InitScheduler() *scheduler {
 	if Scheduler != nil {
 		glog.Fatalf("scheduler already inited, something bad is happening")
 	} else {
-		Scheduler = &scheduler{[]*client.Job{}, make(chan *client.Job, 1)}
+		Scheduler = &scheduler{[]*structs.Job{}, make(chan *structs.Job, 1)}
 		go Scheduler.start()
 	}
 	return Scheduler
@@ -24,11 +24,11 @@ func InitScheduler() *scheduler {
 
 func (s *scheduler) start() {
 	for job := range s.channel {
-		glog.Infof("processing job %d, with status %s", job.Id, client.JOB_STATES[job.State])
+		glog.Infof("processing job %d, with status %s", job.Id, structs.JOB_STATES[job.State])
 	}
 }
 
-func (s *scheduler) ProcessJobs(jobs []*client.Job) {
+func (s *scheduler) ProcessJobs(jobs []*structs.Job) {
 	for _, job := range jobs {
 		s.channel <- job
 	}
