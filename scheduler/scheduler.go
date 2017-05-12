@@ -6,7 +6,7 @@ import (
 )
 
 type scheduler struct {
-	jobs    []*structs.Job
+	jobs    map[int]*structs.Job
 	channel chan *structs.Job
 }
 
@@ -16,7 +16,10 @@ func InitScheduler() *scheduler {
 	if Scheduler != nil {
 		glog.Fatalf("scheduler already inited, something bad is happening")
 	} else {
-		Scheduler = &scheduler{[]*structs.Job{}, make(chan *structs.Job, 1)}
+		Scheduler = &scheduler{
+			make(map[int]*structs.Job),
+			make(chan *structs.Job, 1),
+		}
 		go Scheduler.start()
 	}
 	return Scheduler
@@ -24,12 +27,14 @@ func InitScheduler() *scheduler {
 
 func (s *scheduler) start() {
 	for job := range s.channel {
-		glog.Infof("processing job %d, with status %s", job.Id, structs.JOB_STATES[job.State])
+		if _, ok := s.jobs[job.Id]; !ok { // async stuff going around, avoid restart something existing
+			s.jobs[job.Id] = job
+			glog.Infof("starting job %d", job.Id)
+			// start the job
+		}
 	}
 }
 
-func (s *scheduler) ProcessJobs(jobs []*structs.Job) {
-	for _, job := range jobs {
-		s.channel <- job
-	}
+func (s *scheduler) ProcessJob(job *structs.Job) {
+	s.channel <- job
 }

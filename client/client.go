@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/viper"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -19,10 +18,6 @@ var client *Client
 
 func (e *endpoint) Post(body io.Reader) (*http.Response, error) {
 	return e.Client.Post(e.Url, "application/json", body)
-}
-
-func (e *endpoint) Get(id int) (*http.Response, error) {
-	return e.Client.Get(utils.Urlize(e.Url, strconv.Itoa(id)))
 }
 
 func newEndpoint(fragment string, parent *endpoint) *endpoint {

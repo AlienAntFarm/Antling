@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/alienantfarm/anthive/utils/structs"
 	"github.com/alienantfarm/antling/client"
 	"github.com/alienantfarm/antling/scheduler"
 	"github.com/alienantfarm/antling/utils/config"
@@ -34,11 +35,26 @@ var rootCmd = &cobra.Command{
 
 		// start main loop
 		for {
+			// retrieve jobs from server
 			jobs, err := self.GetJobs()
-			s.ProcessJobs(jobs)
 			if err != nil {
-				glog.Fatalf("%s", err)
+				glog.Errorf("%s", err)
 			}
+
+			// go over jobs and start new jobs
+			for _, job := range jobs {
+				if job.State == structs.JOB_NEW {
+					job.State += 1
+					s.ProcessJob(job)
+				}
+			}
+
+			// now update the server so it nows which jobs have been started
+			err = self.Update()
+			if err != nil {
+				glog.Errorf("%s", err)
+			}
+
 			time.Sleep(10 * time.Second)
 		}
 	},

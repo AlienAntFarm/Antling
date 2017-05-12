@@ -6,6 +6,7 @@ import (
 	"github.com/alienantfarm/anthive/utils/structs"
 	"github.com/alienantfarm/antling/utils"
 	"net/http"
+	"strconv"
 )
 
 type antling struct {
@@ -39,7 +40,7 @@ func NewAntling(id int, client *Client) *Antling {
 }
 
 func (a *Antling) GetJobs() ([]*structs.Job, error) {
-	resp, err := a.endpoint.Get(a.Id)
+	resp, err := a.endpoint.Client.Get(utils.Urlize(a.endpoint.Url, strconv.Itoa(a.Id)))
 	if err != nil {
 		return nil, err
 	} else if resp.StatusCode != http.StatusOK {
@@ -49,4 +50,24 @@ func (a *Antling) GetJobs() ([]*structs.Job, error) {
 	decoder := json.NewDecoder(resp.Body)
 	err = decoder.Decode(a)
 	return a.Jobs, err
+}
+
+func (a *Antling) Update() error {
+	buf := bytes.NewBuffer(nil)
+	err := json.NewEncoder(buf).Encode(a)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(
+		"PATCH", utils.Urlize(a.endpoint.Url, strconv.Itoa(a.Id)), buf,
+	)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := a.endpoint.Client.Do(req)
+	if err == nil && resp.StatusCode != http.StatusOK {
+		err = &utils.UnexpectedStatusCode{resp.StatusCode, http.StatusOK}
+	}
+	return err
 }
