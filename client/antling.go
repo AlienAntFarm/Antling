@@ -5,16 +5,24 @@ import (
 	"encoding/json"
 	"github.com/alienantfarm/anthive/utils/structs"
 	"github.com/alienantfarm/antling/utils"
+	"github.com/golang/glog"
 	"net/http"
 	"strconv"
 )
 
-type antling struct {
+type Antling struct {
+	*structs.Antling
 	*endpoint
 }
 
-func (a *antling) Create() (antling *Antling, err error) {
-	antling = &Antling{endpoint: a}
+func newAntling(parent *endpoint) *Antling {
+	return &Antling{
+		&structs.Antling{utils.Config.Id, []*structs.Job{}},
+		newEndpoint("antlings", parent),
+	}
+}
+
+func (a *Antling) Create() (err error) {
 	resp, err := a.Post(bytes.NewReader(nil))
 	if err != nil {
 		return
@@ -23,20 +31,11 @@ func (a *antling) Create() (antling *Antling, err error) {
 		return
 	}
 	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(antling)
+	err = decoder.Decode(a)
 	if err != nil {
 		return
 	}
 	return
-}
-
-type Antling struct {
-	structs.Antling
-	endpoint *antling
-}
-
-func NewAntling(id int, client *Client) *Antling {
-	return &Antling{structs.Antling{id, nil}, client.Antling}
 }
 
 func (a *Antling) GetJobs() ([]*structs.Job, error) {
@@ -54,7 +53,7 @@ func (a *Antling) GetJobs() ([]*structs.Job, error) {
 
 func (a *Antling) Update() error {
 	buf := bytes.NewBuffer(nil)
-	err := json.NewEncoder(buf).Encode(a)
+	err := json.NewEncoder(buf).Encode(a.Antling)
 	if err != nil {
 		return err
 	}
@@ -65,9 +64,12 @@ func (a *Antling) Update() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if glog.V(2) {
+		glog.Infof("%q", a)
+	}
 	resp, err := a.endpoint.Client.Do(req)
 	if err == nil && resp.StatusCode != http.StatusOK {
-		err = &utils.UnexpectedStatusCode{resp.StatusCode, http.StatusOK}
+		err = &utils.UnexpectedStatusCode{http.StatusOK, resp.StatusCode}
 	}
 	return err
 }

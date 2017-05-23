@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/alienantfarm/antling/utils"
-	"github.com/spf13/viper"
+	"github.com/golang/glog"
 	"io"
 	"net/http"
 	"time"
@@ -13,8 +13,6 @@ type endpoint struct {
 	Url    string
 	Parent *endpoint
 }
-
-var client *Client
 
 func (e *endpoint) Post(body io.Reader) (*http.Response, error) {
 	return e.Client.Post(e.Url, "application/json", body)
@@ -32,16 +30,18 @@ func newEndpoint(fragment string, parent *endpoint) *endpoint {
 	return &endpoint{client, fragment, parent}
 }
 
-type Client struct {
+type client struct {
 	*endpoint
-	Antling *antling
+	Antling *Antling
 }
 
-func Get() *Client {
-	if client == nil {
-		client = &Client{newEndpoint(viper.GetString("Anthive"), nil), nil}
-		client.Antling = &antling{newEndpoint("antlings", client.endpoint)}
-	}
+var c *client
 
-	return client
+func NewClient() *client {
+	if c == nil {
+		c = &client{newEndpoint(utils.Config.Anthive, nil), nil}
+		c.Antling = newAntling(c.endpoint)
+	}
+	glog.V(2).Infof("asking for a new client %q", c)
+	return c
 }
