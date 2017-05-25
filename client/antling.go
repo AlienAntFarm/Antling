@@ -65,7 +65,7 @@ func (a *Antling) Update() error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if glog.V(2) {
-		glog.Infof("%q", a)
+		glog.Infof(utils.MarshalJSON(a.Antling))
 	}
 	resp, err := a.endpoint.Client.Do(req)
 	if err == nil && resp.StatusCode != http.StatusOK {
