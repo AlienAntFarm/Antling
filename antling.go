@@ -28,8 +28,8 @@ func run(cmd *cobra.Command, args []string) {
 		for _, job := range jobs {
 			if job.State == structs.JOB_NEW {
 				job.State += 1
-				s.ProcessJob(job)
 			}
+			s.ProcessJob(job)
 		}
 
 		// now update the server so it nows which jobs have been started
