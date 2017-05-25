@@ -1,12 +1,11 @@
 package scheduler
 
 import (
-	"archive/tar"
 	"github.com/alienantfarm/anthive/utils/structs"
 	"github.com/alienantfarm/antling/client"
+	"github.com/alienantfarm/antling/lxc"
 	"github.com/alienantfarm/antling/utils"
 	"github.com/golang/glog"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -40,9 +39,7 @@ func InitScheduler() *scheduler {
 		}
 		for _, image := range files {
 			glog.Infof("caching image %s", image.Name())
-			Scheduler.cache = append(
-				Scheduler.cache, path.Join(utils.Config.LXC, image.Name()),
-			)
+			Scheduler.cache = append(Scheduler.cache, image.Name())
 		}
 		go Scheduler.start()
 	}
@@ -63,52 +60,11 @@ func (s *scheduler) start() {
 	}
 }
 
-func (s *scheduler) deflateLXC(reader *tar.Reader) error {
-	pwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	for {
-		header, err := reader.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		info := header.FileInfo()
-		target := path.Join(pwd, header.Name)
-		if info.IsDir() {
-			if err = os.MkdirAll(target, info.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		// do not deflate manifest.json for now
-		if info.Name() == "manifest.json" {
-			continue
-		}
-
-		file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		_, err = io.Copy(file, reader)
-		if err != nil {
-			return err
-		}
-	}
-	// now add to in memory cache
-	s.cache = append(s.cache, path.Dir(pwd)) // this remove rootfs from path
-	return nil
-}
-
 func (s *scheduler) checkLXC(image string) error {
 	glog.Infof("looking for %s in cache", image)
 
 	for _, entry := range s.cache {
-		if path.Base(entry) == image {
+		if entry == image {
 			return nil
 		}
 	}
@@ -121,12 +77,14 @@ func (s *scheduler) checkLXC(image string) error {
 		return err
 	}
 
+	glog.Infof("caching image: %s", image)
 	if reader, err := s.client.Images.Get(image); err != nil {
 		return err
+	} else if err := lxc.DeflateLXC(reader); err != nil {
+		return err
 	} else {
-		glog.Infof("caching image: %s", image)
-		defer reader.Close()
-		return s.deflateLXC(tar.NewReader(reader))
+		s.cache = append(s.cache, image)
+		return nil
 	}
 }
 
