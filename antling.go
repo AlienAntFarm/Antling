@@ -48,7 +48,9 @@ func runRegister(cmd *cobra.Command, args []string) {
 		glog.Fatalf("%s", err)
 	}
 	utils.Config.Id = antling.Id
-	utils.Config.Save()
+	if err := utils.Config.Save(); err != nil {
+		glog.Fatalf("%s", err)
+	}
 }
 
 func main() {

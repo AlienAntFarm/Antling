@@ -1,0 +1,5 @@
+#### DEFAULT CONFIGURATION #####
+
+id = {{.Id}}
+debug = {{.Debug}}
+anthive_url = "{{.Anthive}}"

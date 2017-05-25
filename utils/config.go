@@ -1,38 +1,70 @@
 package utils
 
 import (
-	"encoding/json"
 	"flag"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
+	"path"
 	"strconv"
+	"text/template"
 )
 
+const configName = "antling.toml"
+
 type Configuration struct {
-	Id      int    `json:"id"`
-	Debug   bool   `json:"debug"`
-	Anthive string `json:"anthive"`
-	Images  string `json:"-"`
+	Id        int
+	Debug     bool
+	Dev       bool
+	Anthive   string
+	Images    string
+	Templates string
+	Cache     string
 }
 
-func (c *Configuration) Save() error {
-	f, err := os.Create("config.json") // create file in place
-	if err != nil {
-		return err
+func (c *Configuration) Save() (err error) {
+	var (
+		file     *os.File
+		filepath string
+		tmpl     *template.Template
+	)
+	if viper.GetBool("Dev") {
+		filepath = configName // create file in place
+	} else {
+		filepath = path.Join("/etc", configName)
 	}
-	defer f.Close()
-	return json.NewEncoder(f).Encode(c)
+	if file, err = os.Create(filepath); err != nil {
+		return
+	}
+	defer file.Close()
+	filepath = path.Join(c.Templates, configName)
+	if tmpl, err = template.ParseFiles(filepath); err != nil {
+		return
+	}
+	return tmpl.Execute(file, c)
 }
 
 func PreRun(cmd *cobra.Command, args []string) {
 	// reinit args for glog
 	os.Args = os.Args[:1]
 
-	viper.Unmarshal(Config)     // this will load default config
-	err := viper.ReadInConfig() // load config
-	if err != nil {
+	// make glog happy and log to the correct place
+	flag.Set("logtostderr", "true")
+	flag.Parse()
+
+	// check dev mode, and reset some configs
+	if viper.GetBool("Dev") {
+		viper.Set("Templates", path.Join(".", "templates"))
+		viper.Set("Cache", path.Join(sep, "tmp", "antling"))
+		if err := os.MkdirAll(viper.GetString("Cache"), 0755); err != nil {
+			glog.Fatalf("%s", err)
+		}
+	}
+
+	viper.Unmarshal(Config) // this will load default config
+
+	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			glog.Infof("creating a new config file")
 			// a bit crappy but should handle this correctly
@@ -43,16 +75,14 @@ func PreRun(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	err = viper.Unmarshal(Config)
-	if err != nil {
+	if err := viper.Unmarshal(Config); err != nil {
 		glog.Errorf("%q", Config)
-		glog.Fatalf("when unmarshalling the json: %s", err)
+		glog.Fatalf("when unmarshalling the config: %s", err)
 	}
 	if Config.Debug { // debug is same as -vvvvv
 		verbosity = 5
 	}
 	flag.Set("v", strconv.Itoa(verbosity))
-	flag.Set("logtostderr", "true")
 	flag.Parse()
 	glog.V(1).Infoln("debug mode enabled")
 	glog.V(2).Infof("%q", Config)
@@ -75,22 +105,31 @@ var (
 
 func init() {
 	debugMsg := "trigger debug logs, same as -vvvvv, take precedence over verbose flag"
+	devMsg := "dev mode, instead of getting path from the system use those at $PWD"
 	verboseMsg := "verbose output, can be stacked to increase verbosity"
 
 	Command.PersistentFlags().Bool("debug", false, debugMsg)
+	Command.PersistentFlags().Bool("dev", false, devMsg)
 	Command.PersistentFlags().CountVarP(&verbosity, "verbose", "v", verboseMsg)
 
 	Command.AddCommand(RegisterCommand)
 
 	viper.BindPFlag("Debug", Command.PersistentFlags().Lookup("debug"))
-	viper.Set("PROJECT", "github.com/alienantfarm/antling")
-	viper.Set("CONFIG", "ANTLING_CONFIG")
+	viper.BindPFlag("Dev", Command.PersistentFlags().Lookup("dev"))
 
-	// set Images path
+	viper.Set("PROJECT", "github.com/alienantfarm/antling")
+
 	viper.Set("Images", Urlize("assets", "images"))
+
+	// set some paths
+	viper.Set("Cache", path.Join(sep, "var", "cache", "antling"))
+	viper.Set("Templates", path.Join(sep, "usr", "share", "antling", "templates"))
+
 	viper.BindEnv("Anthive", "ANTHIVE_URL")
 
-	viper.SetConfigName("config")
-	viper.AddConfigPath("$" + viper.GetString("CONFIG") + sep)
+	viper.SetConfigName(configName[:len(configName)-5])
+
+	viper.AddConfigPath("/etc")
 	viper.AddConfigPath(".")
+	viper.AddConfigPath("$ANTLING_CONFIG/")
 }
