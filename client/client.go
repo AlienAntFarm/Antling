@@ -30,18 +30,20 @@ func newEndpoint(fragment string, parent *endpoint) *endpoint {
 	return &endpoint{client, fragment, parent}
 }
 
-type client struct {
+type Client struct {
 	*endpoint
 	Antling *Antling
+	Images  *Images
 }
 
-var c *client
+var client *Client
 
-func NewClient() *client {
-	if c == nil {
-		c = &client{newEndpoint(utils.Config.Anthive, nil), nil}
-		c.Antling = newAntling(c.endpoint)
+func NewClient() *Client {
+	if client == nil {
+		client = &Client{newEndpoint(utils.Config.Anthive, nil), nil, nil}
+		client.Antling = newAntling(client.endpoint)
+		client.Images = newImages(client.endpoint)
 	}
-	glog.V(2).Infof("asking for a new client %q", c)
-	return c
+	glog.V(2).Infof("asking for a new client %q", client)
+	return client
 }
