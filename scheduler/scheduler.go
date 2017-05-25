@@ -6,6 +6,7 @@ import (
 	"github.com/alienantfarm/antling/lxc"
 	"github.com/alienantfarm/antling/utils"
 	"github.com/golang/glog"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -33,7 +34,7 @@ func InitScheduler() *scheduler {
 			client.NewClient(),
 		}
 		// retrieve lxc images
-		files, err := ioutil.ReadDir(utils.Config.LXC)
+		files, err := ioutil.ReadDir(utils.Config.Paths.LXC)
 		if err != nil {
 			glog.Fatalf("reading images cache failed %s", err)
 		}
@@ -60,31 +61,35 @@ func (s *scheduler) start() {
 	}
 }
 
-func (s *scheduler) checkLXC(image string) error {
+func (s *scheduler) checkLXC(image string) (err error) {
+	var reader io.ReadCloser
+
 	glog.Infof("looking for %s in cache", image)
 
 	for _, entry := range s.cache {
 		if entry == image {
-			return nil
+			return
 		}
 	}
-	rootfs := path.Join(utils.Config.LXC, image, "rootfs")
+	rootfs := path.Join(utils.Config.Paths.LXC, image, "rootfs")
 
-	if err := os.MkdirAll(rootfs, 0770); err != nil {
-		return err
+	if err = os.MkdirAll(rootfs, 0770); err != nil {
+		return
 	}
-	if err := os.Chdir(rootfs); err != nil {
-		return err
+	defer func() { utils.RemoveOnFail(path.Dir(rootfs), err) }()
+
+	if err = os.Chdir(rootfs); err != nil {
+		return
 	}
 
 	glog.Infof("caching image: %s", image)
-	if reader, err := s.client.Images.Get(image); err != nil {
-		return err
-	} else if err := lxc.DeflateLXC(reader); err != nil {
-		return err
+	if reader, err = s.client.Images.Get(image); err != nil {
+		return
+	} else if err = lxc.DeflateLXC(reader); err != nil {
+		return
 	} else {
 		s.cache = append(s.cache, image)
-		return nil
+		return
 	}
 }
 

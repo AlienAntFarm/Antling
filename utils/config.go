@@ -11,38 +11,50 @@ import (
 	"text/template"
 )
 
-const CONFIG_NAME = "antling.toml"
+const CONFIG = "antling.toml"
+const CONFIG_LXC = "lxc.conf"
 const IMAGES_PREFIX = "/static/images"
 
 type Configuration struct {
-	Id        int
-	Debug     bool
-	Dev       bool
-	Anthive   string
-	Templates string
-	LXC       string
+	Id      int
+	Debug   bool
+	Dev     bool
+	Anthive string
+	Paths   struct {
+		Templates string
+		LXC       string
+		Conf      string
+	}
+	Templates struct {
+		Path    string
+		ConfLXC *template.Template
+		Conf    *template.Template
+	}
 }
 
-func (c *Configuration) Save() (err error) {
-	var (
-		file     *os.File
-		filepath string
-		tmpl     *template.Template
-	)
-	if viper.GetBool("Dev") {
-		filepath = CONFIG_NAME // create file in place
+func (c *Configuration) Save() error {
+	if file, err := os.Create(c.Paths.Conf); err != nil {
+		return err
 	} else {
-		filepath = path.Join("/etc", CONFIG_NAME)
+		defer file.Close()
+		return c.Templates.Conf.Execute(file, c)
 	}
-	if file, err = os.Create(filepath); err != nil {
-		return
+}
+
+func (c *Configuration) LoadTemplates() error {
+	tplts := map[string]**template.Template{
+		CONFIG_LXC: &c.Templates.ConfLXC,
+		CONFIG:     &c.Templates.Conf,
 	}
-	defer file.Close()
-	filepath = path.Join(c.Templates, CONFIG_NAME)
-	if tmpl, err = template.ParseFiles(filepath); err != nil {
-		return
+	for name, tplt := range tplts {
+		name = path.Join(c.Paths.Templates, name)
+		if t, err := template.ParseFiles(name); err != nil {
+			return err
+		} else {
+			*tplt = t
+		}
 	}
-	return tmpl.Execute(file, c)
+	return nil
 }
 
 func PreRun(cmd *cobra.Command, args []string) {
@@ -57,7 +69,8 @@ func PreRun(cmd *cobra.Command, args []string) {
 	// check dev mode, and reset some configs
 	if viper.GetBool("Dev") {
 		glog.Infof("dev mode enabled")
-		viper.Set("Templates", path.Join(".", "templates"))
+		viper.Set("Paths.Templates", path.Join(".", "templates"))
+		viper.Set("Paths.Conf", path.Join(CONFIG)) // create config in place
 	}
 
 	viper.Unmarshal(Config) // this will load default config
@@ -82,6 +95,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 	}
 	flag.Set("v", strconv.Itoa(verbosity))
 	flag.Parse()
+	Config.LoadTemplates()
 	glog.V(1).Infoln("debug mode enabled")
 	glog.V(2).Infof("%q", Config)
 }
@@ -118,12 +132,13 @@ func init() {
 	viper.Set("PROJECT", "github.com/alienantfarm/antling")
 
 	// set some paths
-	viper.Set("LXC", path.Join(sep, "var", "lib", "lxc"))
-	viper.Set("Templates", path.Join(sep, "usr", "share", "antling", "templates"))
+	viper.Set("Paths.LXC", path.Join(sep, "var", "lib", "lxc"))
+	viper.Set("Paths.Templates", path.Join(sep, "usr", "share", "antling", "templates"))
+	viper.Set("Paths.Conf", path.Join("/etc", CONFIG))
 
 	viper.BindEnv("Anthive", "ANTHIVE_URL")
 
-	viper.SetConfigName(CONFIG_NAME[:len(CONFIG_NAME)-5])
+	viper.SetConfigName(CONFIG[:len(CONFIG)-5])
 
 	viper.AddConfigPath("/etc")
 	viper.AddConfigPath(".")
