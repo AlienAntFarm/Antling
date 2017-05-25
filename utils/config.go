@@ -11,14 +11,14 @@ import (
 	"text/template"
 )
 
-const configName = "antling.toml"
+const CONFIG_NAME = "antling.toml"
+const IMAGES_PREFIX = "/static/images"
 
 type Configuration struct {
 	Id        int
 	Debug     bool
 	Dev       bool
 	Anthive   string
-	Images    string
 	Templates string
 	Cache     string
 }
@@ -30,15 +30,15 @@ func (c *Configuration) Save() (err error) {
 		tmpl     *template.Template
 	)
 	if viper.GetBool("Dev") {
-		filepath = configName // create file in place
+		filepath = CONFIG_NAME // create file in place
 	} else {
-		filepath = path.Join("/etc", configName)
+		filepath = path.Join("/etc", CONFIG_NAME)
 	}
 	if file, err = os.Create(filepath); err != nil {
 		return
 	}
 	defer file.Close()
-	filepath = path.Join(c.Templates, configName)
+	filepath = path.Join(c.Templates, CONFIG_NAME)
 	if tmpl, err = template.ParseFiles(filepath); err != nil {
 		return
 	}
@@ -53,8 +53,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 
+	viper.ReadInConfig()
 	// check dev mode, and reset some configs
 	if viper.GetBool("Dev") {
+		glog.Infof("dev mode enabled")
 		viper.Set("Templates", path.Join(".", "templates"))
 		viper.Set("Cache", path.Join(sep, "tmp", "antling"))
 		if err := os.MkdirAll(viper.GetString("Cache"), 0755); err != nil {
@@ -119,15 +121,13 @@ func init() {
 
 	viper.Set("PROJECT", "github.com/alienantfarm/antling")
 
-	viper.Set("Images", Urlize("assets", "images"))
-
 	// set some paths
 	viper.Set("Cache", path.Join(sep, "var", "cache", "antling"))
 	viper.Set("Templates", path.Join(sep, "usr", "share", "antling", "templates"))
 
 	viper.BindEnv("Anthive", "ANTHIVE_URL")
 
-	viper.SetConfigName(configName[:len(configName)-5])
+	viper.SetConfigName(CONFIG_NAME[:len(CONFIG_NAME)-5])
 
 	viper.AddConfigPath("/etc")
 	viper.AddConfigPath(".")
