@@ -20,7 +20,7 @@ type Configuration struct {
 	Dev       bool
 	Anthive   string
 	Templates string
-	Cache     string
+	LXC       string
 }
 
 func (c *Configuration) Save() (err error) {
@@ -58,10 +58,6 @@ func PreRun(cmd *cobra.Command, args []string) {
 	if viper.GetBool("Dev") {
 		glog.Infof("dev mode enabled")
 		viper.Set("Templates", path.Join(".", "templates"))
-		viper.Set("Cache", path.Join(sep, "tmp", "antling"))
-		if err := os.MkdirAll(viper.GetString("Cache"), 0755); err != nil {
-			glog.Fatalf("%s", err)
-		}
 	}
 
 	viper.Unmarshal(Config) // this will load default config
@@ -122,7 +118,7 @@ func init() {
 	viper.Set("PROJECT", "github.com/alienantfarm/antling")
 
 	// set some paths
-	viper.Set("Cache", path.Join(sep, "var", "cache", "antling"))
+	viper.Set("LXC", path.Join(sep, "var", "lib", "lxc"))
 	viper.Set("Templates", path.Join(sep, "usr", "share", "antling", "templates"))
 
 	viper.BindEnv("Anthive", "ANTHIVE_URL")
