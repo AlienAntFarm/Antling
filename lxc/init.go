@@ -39,24 +39,32 @@ func DeflateLXC(reader io.ReadCloser) error {
 			}
 			continue
 		}
-
+		if glog.V(5) { // only for debug, output too much informations
+			glog.Infof("Uncompressing %s, with metadata %q", header.Name, info)
+		}
 		target := path.Join(".", header.Name)
-		if info.IsDir() {
-			if err = os.MkdirAll(target, info.Mode()); err != nil {
+		mode := info.Mode()
+		switch {
+		case mode&os.ModeDir != 0:
+			if err = os.MkdirAll(target, mode); err != nil {
 				return err
 			}
-			continue
+		case mode&os.ModeSymlink != 0:
+			if err := os.Symlink(header.Linkname, target); err != nil {
+				return err
+			}
+		default:
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			_, err = io.Copy(file, tarReader)
+			if err != nil {
+				return err
+			}
 		}
 
-		file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		_, err = io.Copy(file, tarReader)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
