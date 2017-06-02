@@ -96,7 +96,11 @@ func (s *scheduler) checkLXC(image string) (err error) {
 func (s *scheduler) startJob(job *structs.Job) error {
 	// check lxc dir and download if image is not here
 	if err := s.checkLXC(job.Image.Archive); err != nil {
-		glog.Errorf("cache hit failed %s", err)
+		glog.Errorf("cache hit failed for %s: %s", job.Image.Archive, err)
+		return err
+	}
+	if err := lxc.Start(job); err != nil {
+		glog.Errorf("error when running container %s: %s", job.Image.Archive, err)
 		return err
 	}
 

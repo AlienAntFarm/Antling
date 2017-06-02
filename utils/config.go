@@ -57,6 +57,19 @@ func (c *Configuration) LoadTemplates() error {
 	return nil
 }
 
+func (c *Configuration) CreatePaths() error {
+	paths := []string{
+		c.Paths.LXC,
+	}
+
+	for _, p := range paths {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func PreRun(cmd *cobra.Command, args []string) {
 	// reinit args for glog
 	os.Args = os.Args[:1]
@@ -69,8 +82,13 @@ func PreRun(cmd *cobra.Command, args []string) {
 	// check dev mode, and reset some configs
 	if viper.GetBool("Dev") {
 		glog.Infof("dev mode enabled")
-		viper.Set("Paths.Templates", path.Join(".", "templates"))
+		wd, err := os.Getwd()
+		if err != nil {
+			glog.Fatalf("%s", err)
+		}
+		viper.Set("Paths.Templates", path.Join(wd, "templates"))
 		viper.Set("Paths.Conf", path.Join(CONFIG)) // create config in place
+		viper.Set("Paths.LXC", path.Join(wd, "var", "antling"))
 	}
 
 	viper.Unmarshal(Config) // this will load default config
@@ -95,9 +113,22 @@ func PreRun(cmd *cobra.Command, args []string) {
 	}
 	flag.Set("v", strconv.Itoa(verbosity))
 	flag.Parse()
-	Config.LoadTemplates()
+
+	if err := Config.LoadTemplates(); err != nil {
+		glog.Fatalf("%s", err)
+	}
+	if err := Config.CreatePaths(); err != nil {
+		glog.Fatalf("%s", err)
+	}
+
 	glog.V(1).Infoln("debug mode enabled")
 	glog.V(2).Infof("%q", Config)
+}
+
+func LogLevel() int {
+	//discard error
+	level, _ := strconv.Atoi(flag.Lookup("v").Value.String())
+	return level
 }
 
 var (
