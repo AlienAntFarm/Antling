@@ -11,13 +11,15 @@ import (
 )
 
 type Antling struct {
-	*structs.Antling
+	Id   int
+	Jobs map[int]*structs.Job
 	*endpoint
 }
 
 func newAntling(parent *endpoint) *Antling {
 	return &Antling{
-		&structs.Antling{utils.Config.Id, []*structs.Job{}},
+		utils.Config.Id,
+		map[int]*structs.Job{},
 		newEndpoint("antlings", parent),
 	}
 }
@@ -30,11 +32,13 @@ func (a *Antling) Create() (err error) {
 		err = &utils.UnexpectedStatusCode{resp.StatusCode, http.StatusCreated}
 		return
 	}
-	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(a)
-	if err != nil {
+	antling := struct {
+		Id int `json:"id"`
+	}{}
+	if err = json.NewDecoder(resp.Body).Decode(antling); err != nil {
 		return
 	}
+	a.Id = antling.Id
 	return
 }
 
@@ -45,18 +49,20 @@ func (a *Antling) GetJobs() ([]*structs.Job, error) {
 	} else if resp.StatusCode != http.StatusOK {
 		return nil, &utils.UnexpectedStatusCode{resp.StatusCode, http.StatusOK}
 	}
-	a.Jobs = []*structs.Job{}
-	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(a)
-	return a.Jobs, err
+	antling := &structs.Antling{Jobs: []*structs.Job{}}
+	return antling.Jobs, json.NewDecoder(resp.Body).Decode(antling)
 }
 
 func (a *Antling) Update() error {
-	buf := bytes.NewBuffer(nil)
-	err := json.NewEncoder(buf).Encode(a.Antling)
-	if err != nil {
-		return err
+	jobs := []*structs.Job{}
+
+	for _, job := range a.Jobs {
+		jobs = append(jobs, job)
 	}
+
+	antling := structs.Antling{a.Id, jobs}
+	buf := bytes.NewBuffer(utils.MarshalJSONb(antling))
+
 	req, err := http.NewRequest(
 		"PATCH", utils.Urlize(a.endpoint.Url, strconv.Itoa(a.Id)), buf,
 	)
@@ -65,7 +71,7 @@ func (a *Antling) Update() error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if glog.V(2) {
-		glog.Infof(utils.MarshalJSON(a.Antling))
+		glog.Infof(utils.MarshalJSON(antling))
 	}
 	resp, err := a.endpoint.Client.Do(req)
 	if err == nil && resp.StatusCode != http.StatusOK {

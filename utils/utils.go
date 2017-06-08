@@ -23,9 +23,16 @@ func (usc *UnexpectedStatusCode) Error() string {
 	)
 }
 
+func MarshalJSONb(i interface{}) (b []byte) {
+	var err error
+	if b, err = json.Marshal(i); err != nil {
+		glog.Errorf("%s when marshalling %q", err, i)
+	}
+	return b
+}
+
 func MarshalJSON(i interface{}) string {
-	b, _ := json.Marshal(i)
-	return string(b)
+	return string(MarshalJSONb(i))
 }
 
 func RemoveOnFail(path string, err error) {

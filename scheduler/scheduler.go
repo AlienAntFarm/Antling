@@ -50,13 +50,29 @@ func InitScheduler() *scheduler {
 func (s *scheduler) start() {
 	for job := range s.channel {
 		if _, ok := s.jobs[job.Id]; !ok { // async stuff going around, avoid restart something existing
-			glog.Infof("starting job %d", job.Id)
-			// start the job
-			if err := s.startJob(job); err != nil {
-				glog.Infof("job starting failed, retrying later")
+			if job.State > structs.JOB_PENDING {
 				continue
 			}
+			if job.Retries > structs.MAX_RETRIES {
+				glog.Errorf("too much retries for job %d, entering failed state", job.Id)
+				job.State = structs.JOB_ERROR
+				continue
+			}
+			glog.Infof("starting job %d", job.Id)
 			s.jobs[job.Id] = job
+
+			// start the job
+			go func(job *structs.Job) {
+				if err := s.startJob(job); err != nil {
+					glog.Infof("job starting failed, retrying later")
+					job.Retries += 1
+					delete(s.jobs, job.Id)
+				} else {
+					glog.Infof("job %d succeed", job.Id)
+					job.State += 1
+					glog.Infof(utils.MarshalJSON(job))
+				}
+			}(job) // not sure how this behave in asynchronous world, better copy address
 		}
 	}
 }
