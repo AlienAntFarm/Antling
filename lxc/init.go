@@ -11,6 +11,7 @@ import (
 func DeflateLXC(reader io.ReadCloser) error {
 	defer reader.Close()
 	tarReader := tar.NewReader(reader)
+	flag := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -39,13 +40,11 @@ func DeflateLXC(reader io.ReadCloser) error {
 				return err
 			}
 		default:
-			file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-			if err != nil {
+			if file, err := os.OpenFile(target, flag, mode); err != nil {
 				return err
-			}
-			defer file.Close()
-			_, err = io.Copy(file, tarReader)
-			if err != nil {
+			} else if _, err = io.Copy(file, tarReader); err != nil {
+				return err
+			} else if err := file.Close(); err != nil {
 				return err
 			}
 		}

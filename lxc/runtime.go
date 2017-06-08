@@ -28,6 +28,10 @@ func Start(job *structs.Job) error {
 	}
 	defer p.Close()
 
+	options, err := setupOptions(job, p)
+	if err != nil {
+		return err
+	}
 	//create and start the container
 	c, err := lxc.NewContainer(job.Image.Archive, utils.Config.Paths.LXC)
 	if err != nil {
@@ -36,20 +40,14 @@ func Start(job *structs.Job) error {
 	c.SetLogLevel(LOG_LEVELS[utils.LogLevel()]) // pass log level to container
 	c.SetLogFile(path.Join(p.dir, "logs"))
 
-	options, err := setupOptions(job, p)
-	if err != nil {
-		return err
-	}
 	if err := c.Start(); err != nil {
 		return err
 	}
-
 	glog.Infof("RunCommand")
 	if _, err := c.RunCommand(job.SanitizeCmd(), *options); err != nil {
 		return err
 	}
 
-	glog.Infof("Done")
 	if err := c.Stop(); err != nil {
 		return err
 	}
@@ -71,18 +69,17 @@ func setupOptions(job *structs.Job, pipes *pipes) (*lxc.AttachOptions, error) {
 		RootFS:   path.Join(utils.Config.Paths.LXC, job.Image.Archive),
 		Arch:     runtime.GOARCH,
 	}
-	glog.Infof(utils.MarshalJSON(config))
+	glog.Infof("%s config: %s", job.Image.Archive, utils.MarshalJSON(config))
 
 	// create file and write it through a template
 	if file, err := os.Create(path.Join(config.RootFS, "config")); err != nil {
 		return nil, err
 	} else if err := utils.Config.Templates.ConfLXC.Execute(file, config); err != nil {
 		return nil, err
-	} else {
-		file.Close()
+	} else if err := file.Close(); err != nil {
+		return nil, err
 	}
 
-	glog.Infof(job.SanitizeCwd())
 	return &lxc.AttachOptions{
 		Namespaces: -1,
 		Arch:       -1,

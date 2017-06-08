@@ -73,7 +73,7 @@ func (s *scheduler) checkLXC(image string) (err error) {
 	}
 	rootfs := path.Join(utils.Config.Paths.LXC, image, "rootfs")
 
-	if err = os.MkdirAll(rootfs, 0770); err != nil {
+	if err = os.MkdirAll(rootfs, 0755); err != nil {
 		return
 	}
 	defer func() { utils.RemoveOnFail(path.Dir(rootfs), err) }()

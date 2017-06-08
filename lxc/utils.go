@@ -8,12 +8,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 	"syscall"
 )
 
 type pipes struct {
 	stdin, stderr, stdout *os.File
 	dir                   string
+	closing               bool
+	wg                    *sync.WaitGroup
 }
 
 func extractLog(data []byte) []byte {
@@ -45,60 +48,71 @@ func ScanLXCLogs(data []byte, atEOF bool) (advance int, token []byte, err error)
 	return 0, nil, nil
 }
 
-func pipeReading(path string, splitFunc bufio.SplitFunc) {
+func (p *pipes) pipeReading(path string, splitFunc bufio.SplitFunc) {
+	defer p.wg.Done()
+
 	glog.Infof("opening %s for reading", path)
-	if pipe, err := os.OpenFile(path, os.O_RDONLY, 0600); err != nil {
+	if pipe, err := os.OpenFile(path, os.O_RDONLY, os.ModeNamedPipe); err != nil {
 		glog.Errorf("opening %s failed, %s", path, err)
 	} else {
 		defer pipe.Close()
 		scanner := bufio.NewScanner(pipe)
-		if splitFunc == nil {
-			splitFunc = bufio.ScanLines
-		}
 		scanner.Split(splitFunc)
 		for scanner.Scan() {
-			glog.Infoln(scanner.Text()) // Println will add back the final '\n'
+			if t := scanner.Text(); t != "" {
+				glog.Infoln(t)
+			}
+			if p.closing { // when  finished state is reached switch to non-blocking
+				syscall.SetNonblock(int(pipe.Fd()), true)
+			}
 		}
 		glog.Infof("closing reading scanner on %s", path)
 	}
 }
 
-func initPipe(path string, splitFunc bufio.SplitFunc) (*os.File, error) {
-	if err := syscall.Mkfifo(path, 0600); err != nil {
+func (p *pipes) initPipe(file string, splitFunc bufio.SplitFunc) (*os.File, error) {
+	file = path.Join(p.dir, file)
+	if err := syscall.Mkfifo(file, 0600); err != nil {
 		return nil, err
 	}
-	go pipeReading(path, splitFunc)
-	glog.Infof("opening for %s writing", path)
-	return os.OpenFile(path, os.O_WRONLY, 0600)
+	p.wg.Add(1)
+	go p.pipeReading(file, splitFunc)
+	glog.Infof("opening for %s writing", file)
+	return os.OpenFile(file, os.O_WRONLY, os.ModeNamedPipe)
 }
 
 func (p *pipes) Close() {
-	for _, pipe := range []*os.File{p.stdin, p.stderr, p.stdout} {
+	p.closing = true
+	for _, pipe := range []*os.File{p.stdin, p.stdout, p.stderr} {
+		pipe.Write([]byte{'\n'})
 		pipe.Close()
 	}
-	os.RemoveAll(p.dir)
+	p.wg.Wait()
+	glog.Infof("all pipes are closed, removing temp dir %s", p.dir)
+	if err := os.RemoveAll(p.dir); err != nil {
+		glog.Errorf("%s", err)
+	}
 }
 
 func newPipes(prefix string) (p *pipes, err error) {
-	p = &pipes{}
+	p = &pipes{wg: &sync.WaitGroup{}}
 
-	if p.stdin, err = os.Open(os.DevNull); err != nil {
-		return
-	}
 	if p.dir, err = ioutil.TempDir("", "antling."+prefix); err != nil {
 		return
 	}
 	defer utils.RemoveOnFail(p.dir, err)
 
-	if p.stderr, err = initPipe(path.Join(p.dir, "stderr"), nil); err != nil {
+	if p.stdin, err = os.Open(os.DevNull); err != nil {
 		return
 	}
-	if p.stdout, err = initPipe(path.Join(p.dir, "stdout"), nil); err != nil {
+	if p.stdout, err = p.initPipe("stdout", bufio.ScanLines); err != nil {
 		return
 	}
-
+	if p.stderr, err = p.initPipe("stderr", bufio.ScanLines); err != nil {
+		return
+	}
 	// set up a named pipe for logs also
-	if _, err = initPipe(path.Join(p.dir, "logs"), ScanLXCLogs); err != nil {
+	if _, err = p.initPipe("logs", ScanLXCLogs); err != nil {
 		return
 	}
 
