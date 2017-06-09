@@ -12,14 +12,14 @@ import (
 
 type Antling struct {
 	Id   int
-	Jobs map[int]*structs.Job
+	Jobs structs.JobMap
 	*endpoint
 }
 
 func newAntling(parent *endpoint) *Antling {
 	return &Antling{
 		utils.Config.Id,
-		map[int]*structs.Job{},
+		structs.JobMap{},
 		newEndpoint("antlings", parent),
 	}
 }
@@ -54,7 +54,7 @@ func (a *Antling) GetJobs() ([]*structs.Job, error) {
 }
 
 func (a *Antling) Update() error {
-	antling := structs.Antling{a.Id, structs.ListJobs(a.Jobs)}
+	antling := structs.Antling{a.Id, a.Jobs.List()}
 	buf := bytes.NewBuffer(utils.MarshalJSONb(antling))
 
 	req, err := http.NewRequest(
