@@ -54,13 +54,7 @@ func (a *Antling) GetJobs() ([]*structs.Job, error) {
 }
 
 func (a *Antling) Update() error {
-	jobs := []*structs.Job{}
-
-	for _, job := range a.Jobs {
-		jobs = append(jobs, job)
-	}
-
-	antling := structs.Antling{a.Id, jobs}
+	antling := structs.Antling{a.Id, structs.ListJobs(a.Jobs)}
 	buf := bytes.NewBuffer(utils.MarshalJSONb(antling))
 
 	req, err := http.NewRequest(

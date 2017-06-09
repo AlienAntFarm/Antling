@@ -28,20 +28,21 @@ func run(cmd *cobra.Command, args []string) {
 			if job.State == structs.JOB_NEW {
 				job.State += 1
 			}
-			if j, ok := self.Jobs[job.Id]; !ok {
+			if _, ok := self.Jobs[job.Id]; !ok {
 				self.Jobs[job.Id] = job
-			} else {
-				job = j // avoid loosing correct reference from previous updates
 			}
-			if job.State < structs.JOB_FINISH { // finished or error do not proceed
-				s.ProcessJob(job)
-			}
+			s.ProcessJob(job)
 		}
 
 		// now update the server so it knows which jobs have been started, finished or errored
-		err = self.Update()
-		if err != nil {
+		if err := self.Update(); err != nil {
 			glog.Errorf("%s", err)
+		} else { // subject to race conditions !
+			for _, job := range self.Jobs {
+				if job.State > structs.JOB_PENDING {
+					delete(self.Jobs, job.Id)
+				}
+			}
 		}
 
 		time.Sleep(10 * time.Second)
